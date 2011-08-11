@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+
+require 'confparser'
+require 'optparse'
+require 'net/github-upload'
+
+module Net
+  module GitHub
+    class Upload
+      def list_files repos
+        raise "required repository name" unless repos
+        res = HTTPClient.get_content("https://github.com/#{repos}/downloads", {
+          "login" => @login,
+          "token" => @token
+        })
+        Nokogiri::HTML(res).xpath('id("manual_downloads")/li').map do |fileinfo|
+          obj = {
+            description:  fileinfo.at_xpath('descendant::h4').text.force_encoding('BINARY').gsub(/.+?\xe2\x80\x94 (.+?)(\n\s*)?$/m, '\1'),
+            date:         fileinfo.at_xpath('descendant::p/time').attribute('title').text,
+            size:         fileinfo.at_xpath('descendant::p/strong').text,
+            id:           /\d+$/.match(fileinfo.at_xpath('a').attribute('href').text)[0]
+          }
+          anchor = fileinfo.at_xpath('descendant::h4/a')
+          obj[:link] = anchor.attribute('href').text
+          obj[:name] = anchor.text
+          obj
+        end
+      end
+    end
+  end
+end
+
+def git_root (dir=Dir.pwd)
+  return dir if File.file?(File.join('.git', 'config'))
+  sup = File.dirname
+  if dir == sup
+    puts "This is NOT a git repository."
+    exit 1
+  end
+  git_root(dir)
+end
+
+login, token = ConfParser.from_file(File.join(Dir.home, '.gitconfig'))['github'].tap {|conf| break [conf['user'], conf['token']] }
+
+file, meth, repo, message = nil, :upload, nil, 'Uploaded wih git-upload'
+
+OptionParser.new {|opts|
+  opts.banner = "Usage: #$0 [options] [repository] file"
+
+  opts.on('-r', '--replace', 'Replace file if exists') {|*|
+    meth = :replace
+  }
+
+  opts.on('-m', '--message MESSAGE', 'Insert an upload message') {|mes|
+    message = mes
+  }
+}.tap {|opts|
+  o = opts.parse!(ARGV)
+
+  case o.size
+  when 1
+    repo = ConfParser.from_file(File.join(git_root, '.git', 'config')).tap {|conf|
+      break conf[conf.keys.grep(/remote \".+?\"/).first]
+    }['url'].match(/\/(.+?)\.git$/)[1]
+
+    file = o.first
+  when 2
+    repo, file = o
+  else
+    puts opts
+    exit 1
+  end
+}
+
+raise "File doesn't exist." unless File.file?(file)
+
+puts "Uploading file '#{file}' to http://github.com/#{login}/#{repo}/downloads"
+
+gh = Net::GitHub::Upload.new(login: login, token: token)
+
+begin
+  raise "Unrecognized error." unless gh.send(meth, {repos: repo, file: file, description: message})
+  puts "Done."
+rescue Exception => e
+  puts "An error as occured: #{e}"
+  exit 1
+end

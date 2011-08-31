@@ -1,6 +1,6 @@
 Gem::Specification.new {|g|
     g.name          = 'github-upload'
-    g.version       = '0.0.1'
+    g.version       = '0.0.2'
     g.author        = 'shura'
     g.email         = 'shura1991@gmail.com'
     g.homepage      = 'http://github.com/shurizzle/github-upload'
@@ -11,5 +11,5 @@ Gem::Specification.new {|g|
     g.executables   = [ 'github-upload' ]
 
     g.add_dependency('confparser')
-    g.add_dependency('net-github-upload', '>= 0.0.5')
+    g.add_dependency('net-github-upload', '>= 0.0.6')
 }

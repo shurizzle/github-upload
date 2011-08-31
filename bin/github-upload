@@ -4,32 +4,6 @@ require 'confparser'
 require 'optparse'
 require 'net/github-upload'
 
-module Net
-  module GitHub
-    class Upload
-      def list_files repos
-        raise "required repository name" unless repos
-        res = HTTPClient.get_content("https://github.com/#{repos}/downloads", {
-          "login" => @login,
-          "token" => @token
-        })
-        Nokogiri::HTML(res).xpath('id("manual_downloads")/li').map do |fileinfo|
-          obj = {
-            description:  fileinfo.at_xpath('descendant::h4').text.force_encoding('BINARY').gsub(/.+?\xe2\x80\x94 (.+?)(\n\s*)?$/m, '\1'),
-            date:         fileinfo.at_xpath('descendant::p/time').attribute('title').text,
-            size:         fileinfo.at_xpath('descendant::p/strong').text,
-            id:           /\d+$/.match(fileinfo.at_xpath('a').attribute('href').text)[0]
-          }
-          anchor = fileinfo.at_xpath('descendant::h4/a')
-          obj[:link] = anchor.attribute('href').text
-          obj[:name] = anchor.text
-          obj
-        end
-      end
-    end
-  end
-end
-
 def git_root (dir=Dir.pwd)
   return dir if File.file?(File.join('.git', 'config'))
   sup = File.dirname
@@ -53,6 +27,11 @@ OptionParser.new {|opts|
 
   opts.on('-m', '--message MESSAGE', 'Insert an upload message') {|mes|
     message = mes
+  }
+
+  opts.on_tail('-v', '--version', 'Show version') {
+    puts 'github-upload 0.0.2'
+    exit 0
   }
 }.tap {|opts|
   o = opts.parse!(ARGV)
